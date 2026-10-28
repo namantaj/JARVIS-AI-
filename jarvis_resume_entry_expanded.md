@@ -1,0 +1,8 @@
+### JARVIS — Justified Autonomous Research & Verification Intelligence System
+**Tech Stack:** Python, Google Gemini, LangChain, LangGraph, Tavily Search API, BeautifulSoup4, Requests, FastAPI, Uvicorn, React.js, Vite, Tailwind CSS, Axios, REST APIs
+
+* **Autonomous Multi-Agent Pipeline:** Architected a 4-stage research pipeline (`Search Agent` → `Reader Agent` → `Writer Pipeline` → `Critic Pipeline`) using LangGraph ReAct agents and Google Gemini LLM (`gemini-3.1-flash-lite`) to automate topic planning, live web querying, article extraction, and report compilation.
+* **Web Search & Scraping Engine:** Integrated Tavily Search API for real-time web querying and built a web scraping module using BeautifulSoup4 and `requests` with custom browser headers (`User-Agent`) and 8-second timeouts, stripping boilerplate HTML tags (`script`, `style`, `nav`, `footer`) to extract clean contextual text.
+* **Asynchronous Backend Architecture:** Designed a non-blocking FastAPI REST server using Python multi-threading (`threading.Thread`) to execute multi-step research jobs asynchronously, exposing endpoints for job creation (`POST /api/research`), live progress polling (`GET /api/research/{id}/status`), and historical job retrieval.
+* **Interactive Frontend & Telemetry:** Developed a responsive React workspace built with Vite, Axios, and Tailwind CSS, featuring visual agent telemetry node animations, streaming execution logs, interactive Markdown report viewers with source link cards, and expandable evidence accordions.
+* **Automated Critic Quality Audit:** Built a dedicated Critic evaluation chain that parses LLM review feedback using custom regular expressions to extract quality scores out of 10, bulleted strengths, areas to improve, and audit verdicts.

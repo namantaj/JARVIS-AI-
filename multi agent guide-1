@@ -1,0 +1,423 @@
+# PART 1 — PROJECT OVERVIEW: MULTI-AGENT RESEARCH SYSTEM
+
+---
+
+# 1. What This Project Does
+
+### Simple Explanation
+Imagine you are writing a detailed research paper on a complex topic (e.g., *"Impact of AI on Software Engineering Jobs"*).
+
+If you were doing this manually, you would:
+1. Search Google for recent articles and data.
+2. Open several links and read through long web pages to extract key facts.
+3. Write a structured report summarizing what you learned.
+4. Have an expert critic proofread your report, grade it out of 10, and highlight any weak points.
+
+**This project automates that entire process using an AI multi-agent workflow.**
+
+### Key Answers
+* **What does the application do?**  
+  It is an **Autonomous AI Research Workspace**. The user enters any research topic, and an automated system of AI agents searches the web, extracts deep webpage content, drafts a professional report, and audits the report for factual quality.
+
+* **What problem does it solve?**  
+  Manual web research is slow and tedious. Standard ChatGPT or Gemini prompts often generate static answers without searching live web content or verifying their own claims. This project conducts live web searches, extracts real web data using web scrapers, and critiques its own work.
+
+* **Who would use it?**  
+  Students, researchers, market analysts, journalists, and software developers who need fast, structured, up-to-date research briefings backed by real internet sources.
+
+* **What happens when a user enters a research topic?**  
+  The topic is sent from the React UI to a Python FastAPI backend. The backend triggers a sequence of AI agents (`Search Agent` → `Reader Agent` → `Writer Pipeline` → `Critic Pipeline`) that execute live web queries, scrape article content, write a Markdown report, and generate a quality score.
+
+* **What does the user finally receive?**  
+  A structured, presentation-ready Markdown report complete with metadata (time taken, sources investigated), clean extracted evidence accordions, source link cards, and a **Critic Audit Dashboard** showing an overall score out of 10, verified strengths, areas to improve, and a final verdict.
+
+---
+
+# 2. Project Architecture
+
+Here is the **REAL** architecture diagram based directly on your code:
+
+```
+                  ┌──────────────────────────────────────────────────┐
+                  │                 REACT FRONTEND                   │
+                  │   Dashboard / ResearchInput / ResearchExecution  │
+                  └─────────────────────────┬────────────────────────┘
+                                            │ HTTP requests (Axios)
+                                            ▼
+                  ┌──────────────────────────────────────────────────┐
+                  │                 FASTAPI BACKEND                  │
+                  │        (server.py / run_server.py)               │
+                  └─────────────────────────┬────────────────────────┘
+                                            │ Background Thread Execution
+                                            ▼
+                  ┌──────────────────────────────────────────────────┐
+                  │                RESEARCH PIPELINE                 │
+                  │                 (pipeline.py)                    │
+                  └───────┬──────────────┬──────────────┬────────────┘
+                          │              │              │            
+      ┌───────────────────┘              │              └───────────────────┐
+      ▼                                  ▼                                  ▼
+┌──────────────┐                  ┌──────────────┐                  ┌──────────────┐
+│ SEARCH AGENT │                  │ READER AGENT │                  │ WRITER CHAIN │
+│ (agents.py)  │                  │ (agents.py)  │                  │ (agents.py)  │
+└──────┬───────┘                  └──────┬───────┘                  └──────┬───────┘
+       │ Tool Call                       │ Tool Call                       │ LLM Prompt
+       ▼                                 ▼                                 ▼
+┌──────────────┐                  ┌──────────────┐                  ┌──────────────┐
+│ TAVILY API   │                  │ BEAUTIFULSOUP│                  │  GEMINI LLM  │
+│  (tools.py)  │                  │  (tools.py)  │                  └──────┬───────┘
+└──────────────┘                  └──────────────┘                         │ Report Text
+                                                                           ▼
+                                                                    ┌──────────────┐
+                                                                    │ CRITIC CHAIN │
+                                                                    │ (agents.py)  │
+                                                                    └──────┬───────┘
+                                                                           │ Evaluation Text
+                                                                           ▼
+                                                                    ┌──────────────┐
+                                                                    │ FINAL RESULT │
+                                                                    │   TO REACT   │
+                                                                    └──────────────┘
+```
+
+---
+
+### Component Breakdown
+
+| Component | Why it exists | What it receives | What it produces | File Location |
+| :--- | :--- | :--- | :--- | :--- |
+| **React Workspace (UI)** | Provides an interactive dashboard for submitting topics and following live agent progress. | User input string (topic) & polling status JSON. | Live progress bars, Markdown report, Critic score card. | `src/pages/Dashboard.jsx`, `src/pages/ResearchExecution.jsx` |
+| **FastAPI Server** | Acts as the REST API layer that receives HTTP requests, manages job state, and spawns background tasks. | JSON payload `{ "topic": "..." }` | Job IDs, live status JSON, and complete research payloads. | `server.py`, `run_server.py` |
+| **Research Pipeline** | Manages the step-by-step execution flow (`Search` → `Read` → `Write` → `Critic`) and reports progress callbacks. | Research topic string & `progress_callback` function | Raw dictionary containing search results, scraped text, report, and feedback. | `pipeline.py` |
+| **Search Agent** | Autonomous ReAct agent configured to query live internet search APIs. | Topic prompt string | Formatted web search snippets and source URLs. | `pipeline.py` (using `create_react_agent`) |
+| **Tavily Tool** | Connects to Tavily API to execute real-time web searches optimized for LLMs. | Search query string | Top 5 web search result blocks (Title, URL, Snippet). | `tools.py` |
+| **Reader Agent** | Autonomous ReAct agent configured to extract raw web content from target links. | Prompt containing search results & URLs | Clean scraped webpage text. | `pipeline.py` (using `create_react_agent`) |
+| **BeautifulSoup Tool** | Fetches raw HTML from a URL using `requests` and strips tags to return clean text. | Web URL string | Clean body text string (truncated to 3,000 chars). | `tools.py` |
+| **Writer Chain** | LCEL chain (`ChatPromptTemplate` + `Gemini` + `StrOutputParser`) that drafts the final research report. | Topic + combined search & scraped research text | Markdown report string (Intro, Key Findings, Conclusion, Sources). | `agents.py` |
+| **Critic Chain** | LCEL chain (`ChatPromptTemplate` + `Gemini` + `StrOutputParser`) that evaluates the report. | Draft report string | Evaluation text containing Score X/10, Strengths, Areas to Improve, and Verdict. | `agents.py` |
+
+---
+
+# 3. Project Directory
+
+Here is the breakdown of every file and folder in your project:
+
+| File / Folder | Purpose | Used By | Depends On | What happens if removed? |
+| :--- | :--- | :--- | :--- | :--- |
+| **`agents.py`** | Initializes the Gemini LLM model (`gemini-3.1-flash-lite`), configures `writer_chain` and `critic_chain`. | `pipeline.py` | `langchain_google_genai`, `.env` | The pipeline cannot generate reports or critique them. |
+| **`tools.py`** | Defines external tools (`TavilySearchResults` and `scrape_webpage` via BeautifulSoup). | `pipeline.py` | `tavily-python`, `bs4`, `requests` | Agents lose access to web search and webpage scraping. |
+| **`pipeline.py`** | Orchestrates the multi-agent execution pipeline (`Search` → `Reader` → `Writer` → `Critic`). | `server.py` | `agents.py`, `tools.py`, `langgraph` | The core AI research logic disappears; backend cannot run research. |
+| **`server.py`** | FastAPI Web Server defining REST endpoints (`/api/research`, `/api/health`), status polling, and JSON parsers. | `run_server.py`, React Frontend | `pipeline.py`, `fastapi`, `uvicorn` | React frontend cannot communicate with the Python backend. |
+| **`run_server.py`** | Server entry point script that starts Uvicorn daemon on port 8000. | Terminal / System processes | `server.py`, `uvicorn` | Must start server manually via command line. |
+| **`requirements.txt`** | Lists all Python package dependencies required by the backend. | `pip` installer | PyPI packages | Developers won't know which Python packages to install. |
+| **`.env`** | Stores private API keys (`GEMINI_API_KEY`, `TAVILY_API_KEY`). | `agents.py`, `tools.py` | Environment system | LLM calls and search calls fail with authentication errors. |
+| **`package.json`** | Lists React frontend dependencies (`react`, `vite`, `tailwindcss`, `axios`, `lucide-react`). | `npm` installer | Node.js ecosystem | Frontend build and dev commands will fail. |
+| **`vite.config.js`** | Configures Vite dev server and build settings. | Vite bundler | `vite` | Frontend won't compile or run locally via `npm run dev`. |
+| **`src/`** | Contains all React source code (components, pages, context, CSS, API handlers). | Browser / User | React, Tailwind CSS | The web UI disappears entirely. |
+
+---
+
+# 4. Technology Stack
+
+### 1. Python (Backend Language)
+* **What it is:** High-level programming language ideal for AI, data processing, and backends.
+* **Why used:** It has the richest ecosystem for AI frameworks (LangChain, LangGraph, Google Gemini SDK).
+* **Where used:** All backend files (`server.py`, `pipeline.py`, `agents.py`, `tools.py`).
+* **Alternative:** Node.js (TypeScript) or Go.
+
+### 2. Google Gemini (`gemini-3.1-flash-lite`)
+* **What it is:** Google's multimodal Large Language Model (LLM).
+* **Why used:** High performance, fast inference speed, long context window, and affordable API tier.
+* **Where used:** In `agents.py` to power ReAct agents, report writing, and critic feedback.
+* **Alternative:** OpenAI (GPT-4o), Anthropic (Claude 3.5 Sonnet), or Ollama (Llama 3).
+
+### 3. LangChain & LCEL (LangChain Expression Language)
+* **What it is:** Framework for building applications with LLMs using composable chains (`prompt | model | parser`).
+* **Why used:** Simplifies structuring prompts, linking LLMs with output parsers, and handling agent logic.
+* **Where used:** `writer_chain` and `critic_chain` in `agents.py`.
+* **Alternative:** LlamaIndex, Haystack, or raw Google GenAI SDK calls.
+
+### 4. LangGraph (`create_react_agent`)
+* **What it is:** An extension of LangChain designed to build stateful, multi-actor agent graphs with tool-calling capabilities.
+* **Why used:** Provides `create_react_agent` to create autonomous agents that automatically select and execute tools in a loop.
+* **Where used:** `search_agent` and `reader_agent` in `pipeline.py`.
+* **Alternative:** AutoGen, CrewAI, or manual function-calling loops.
+
+### 5. Tavily Search API
+* **What it is:** Search engine built specifically for AI agents and RAG applications.
+* **Why used:** Unlike standard Google Search, Tavily returns clean, pre-filtered snippets and URLs optimized for LLM consumption.
+* **Where used:** `TavilySearchResults` tool in `tools.py`.
+* **Alternative:** Serper API, DuckDuckGo Search, Google Custom Search API.
+
+### 6. BeautifulSoup (`bs4`) + `requests`
+* **What it is:** Python HTML parsing library used for web scraping.
+* **Why used:** Enables the `Reader Agent` to fetch full webpage text when search snippets are not enough.
+* **Where used:** `scrape_webpage()` function in `tools.py`.
+* **Alternative:** Playwright, Selenium, Newspaper3k.
+
+### 7. FastAPI & Uvicorn
+* **What it is:** FastAPI is a high-performance Python web framework for building APIs. Uvicorn is an ASGI server that runs it.
+* **Why used:** Asynchronous, lightweight, fast response times, built-in OpenAPI documentation (`/docs`), automatic Pydantic validation.
+* **Where used:** `server.py` and `run_server.py`.
+* **Alternative:** Flask, Django REST Framework.
+
+### 8. React + Vite + Tailwind CSS (Frontend)
+* **What it is:** React is a component-based UI library; Vite is a build tool; Tailwind CSS is a utility-first styling framework.
+* **Why used:** Creates a responsive single-page web app with visual pipeline animations, dark-mode design, and fast hot-reloading.
+* **Where used:** Entire `src/` directory.
+* **Alternative:** Next.js, Vue.js, Svelte.
+
+---
+
+# 5. Real-World Analogy
+
+Think of your project as a **Professional Research Agency**:
+
+```
+ ┌────────────────────────────────────────────────────────────────────────┐
+ │                        RESEARCH AGENCY ANALOGY                         │
+ ├───────────────────┬────────────────────────────────────────────────────┤
+ │ Component         │ Real-World Role                                    │
+ ├───────────────────┼────────────────────────────────────────────────────┤
+ │ React Frontend    │ Client Reception Desk                              │
+ │ FastAPI Server    │ Project Manager / Desk Administrator               │
+ │ Research Pipeline │ Internal Workflow Procedure                        │
+ │ Search Agent      │ Field Investigator (uses Search Machine = Tavily)  │
+ │ Reader Agent      │ Document Reader (uses Scanner = BeautifulSoup)     │
+ │ Writer Chain      │ Senior Report Draftsman (uses Brain = Gemini LLM)  │
+ │ Critic Chain      │ Chief Quality Auditor (uses Brain = Gemini LLM)    │
+ └───────────────────┴────────────────────────────────────────────────────┘
+```
+
+1. **The Client (User)** walks up to the **Reception Desk (React UI)** and asks: *"Give me a research report on AI in Healthcare."*
+2. The **Project Manager (FastAPI Server)** logs the order, assigns a Tracking ID (`job_id`), and hands it to the team.
+3. The **Field Investigator (Search Agent)** queries the web using a **Search Engine (Tavily)** to gather relevant article links.
+4. The **Document Reader (Reader Agent)** uses a **Page Scanner (BeautifulSoup)** to read deeper content from the top links.
+5. The **Senior Draftsman (Writer Chain)** takes all gathered research and writes a comprehensive report.
+6. The **Chief Quality Auditor (Critic Chain)** reviews the draft, grades it out of 10, lists strengths/weaknesses, and issues a final verdict.
+7. The **Project Manager (FastAPI)** delivers the final binder to the **Client (React UI)**.
+
+---
+
+# 6. Complete User Journey
+
+Let's trace what happens when a user submits:  
+**Topic:** *"Impact of AI on software engineering jobs"*
+
+```
+User types topic -> React sends POST -> FastAPI spawns thread -> Pipeline executes Agents -> Results return via GET polling
+```
+
+1. **React UI (`ResearchInput.jsx`)**:
+   - User types `"Impact of AI on software engineering jobs"` and clicks **Start Research**.
+   - React calls `startResearch(topic)` in `src/api/researchApi.js`.
+
+2. **HTTP Request**:
+   - Axios sends an HTTP `POST` request to `http://localhost:8000/api/research` with JSON body:
+     ```json
+     { "topic": "Impact of AI on software engineering jobs" }
+     ```
+
+3. **FastAPI Handling (`server.py`)**:
+   - `start_research_endpoint` receives the request.
+   - Generates a unique ID (e.g. `res-6534318c`).
+   - Creates an in-memory job dictionary with `status = "running"`, `progress = 10%`.
+   - Spawns a background worker thread (`threading.Thread`) running `execute_pipeline_background(job_id, topic)`.
+   - Returns `{ "research_id": "res-6534318c", "status": "started" }` to React immediately.
+
+4. **React Polling Loop (`ResearchExecution.jsx`)**:
+   - React redirects browser to `/research/res-6534318c`.
+   - Every 1.5 seconds, React sends HTTP `GET` to `http://localhost:8000/api/research/res-6534318c/status`.
+   - React updates the visual progress bar (10% → 25% → 50% → 75% → 90% → 100%).
+
+5. **Pipeline Step 1 — Search Agent (10% → 25%)**:
+   - `run_research_pipeline` calls `search_agent.invoke()`.
+   - `Search Agent` decides to call `TavilySearchResults` tool with query *"Impact of AI on software engineering jobs"*.
+   - Tavily returns 5 web search snippets with URLs.
+
+6. **Pipeline Step 2 — Reader Agent (25% → 50%)**:
+   - `run_research_pipeline` calls `reader_agent.invoke()`.
+   - `Reader Agent` selects the top URL and calls `scrape_webpage(url)` tool.
+   - BeautifulSoup downloads the HTML and returns clean webpage text.
+
+7. **Pipeline Step 3 — Writer Chain (50% → 75%)**:
+   - `writer_chain.invoke()` is called with the search snippets + scraped content.
+   - Gemini LLM drafts a structured Markdown research report.
+
+8. **Pipeline Step 4 — Critic Chain (75% → 90%)**:
+   - `critic_chain.invoke()` is called with the draft report.
+   - Gemini LLM evaluates the report and outputs a Score out of 10, Strengths, Areas to Improve, and Verdict.
+
+9. **Result Assembly & Frontend Delivery (90% → 100%)**:
+   - Backend parses sources and critic feedback, and sets job status to `"completed"`.
+   - React's next status poll receives `{ "status": "completed" }`.
+   - React sends a final HTTP `GET` to `/api/research/res-6534318c`.
+   - Backend returns the full payload. React renders the report, critic badge, sources, and evidence.
+
+---
+
+# 7. Important Terminology
+
+### LLM (Large Language Model)
+* **Simple:** An AI brain trained on vast amounts of text that can understand and generate human-like language.
+* **Technical:** A deep neural network (transformer architecture) trained to predict probability distributions over token sequences.
+* **In your project:** Google Gemini (`gemini-3.1-flash-lite`).
+
+### Prompt
+* **Simple:** The text instructions or question you send to the AI.
+* **Technical:** Input string formatted with system instructions, user context, and variable placeholders.
+* **In your project:** `writer_prompt` and `critic_prompt` in `agents.py`.
+
+### Chain
+* **Simple:** Connecting multiple AI steps sequentially (e.g., Prompt → AI → Formatter).
+* **Technical:** A composable execution pipeline in LangChain.
+* **In your project:** `writer_chain = writer_prompt | llm | StrOutputParser()`.
+
+### LCEL (LangChain Expression Language)
+* **Simple:** The `|` pipe syntax used to combine LangChain components together like Unix pipes.
+* **Technical:** Declarative syntax enabling automatic async execution, streaming, and parallel batching of chains.
+* **In your project:** Used in `agents.py` for writer and critic chains.
+
+### Agent
+* **Simple:** An AI worker that can make autonomous decisions and use external tools to solve a task.
+* **Technical:** An LLM wrapped in a loop that reasons about inputs, selects tool actions, observes outputs, and iterates until completion.
+* **In your project:** `Search Agent` and `Reader Agent` created via `create_react_agent()`.
+
+### Tool
+* **Simple:** A function or external helper that an AI agent can choose to call (e.g., search engine, calculator, web scraper).
+* **Technical:** A Python callable wrapped with schema definitions (`name`, `description`, `args_schema`) so an LLM can invoke it via function calling.
+* **In your project:** Tavily Search Tool and BeautifulSoup Web Scraper in `tools.py`.
+
+### Multi-Agent System
+* **Simple:** Multiple specialized AI workers collaborating to complete a complex job.
+* **Technical:** An architectural pattern where multiple autonomous agents or chains perform specialized sub-tasks and pass state between each other.
+* **In your project:** `Search Agent` → `Reader Agent` → `Writer Chain` → `Critic Chain`.
+
+### State
+* **Simple:** The memory dictionary holding current information as the research progresses.
+* **Technical:** A shared data dictionary (`state["search_results"]`, `state["report"]`) passed between nodes.
+* **In your project:** `state` dictionary in `pipeline.py`.
+
+### FastAPI
+* **Simple:** A fast Python web framework for building backend APIs.
+* **Technical:** Asynchronous Python web framework built on Starlette, Pydantic, and ASGI standards.
+* **In your project:** Serves API endpoints in `server.py`.
+
+### Endpoint
+* **Simple:** A specific URL address on your backend server that React can talk to.
+* **Technical:** A route handler registered on a web server (e.g., `POST /api/research`).
+* **In your project:** `/api/health`, `/api/research`, `/api/research/{id}`.
+
+### JSON (JavaScript Object Notation)
+* **Simple:** A simple text format for sending data between frontend and backend.
+* **Technical:** Lightweight data-interchange format formatted as key-value pairs.
+* **In your project:** Data format exchanged between Axios (React) and FastAPI.
+
+---
+
+# 8. Why This Is / Isn't a Multi-Agent System
+
+### The Honest Evaluation
+
+Your project **genuinely qualifies as a Multi-Agent System**, but it is a **Hybrid Multi-Agent Architecture**:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    HYBRID MULTI-AGENT ARCHITECTURE                          │
+├──────────────────────────────────┬──────────────────────────────────────────┤
+│ Autonomous ReAct Agents          │ Sequential LCEL Chains                   │
+├──────────────────────────────────┼──────────────────────────────────────────┤
+│ 1. Search Agent                  │ 3. Writer Chain                          │
+│    - Autonomous ReAct loop       │    - Deterministic LLM prompt            │
+│    - Tool: Tavily Search         │    - Synthesizes report                  │
+│ 2. Reader Agent                  │ 4. Critic Chain                          │
+│    - Autonomous ReAct loop       │    - Deterministic LLM prompt            │
+│    - Tool: BeautifulSoup Scraper │    - Audits & scores report              │
+└──────────────────────────────────┴──────────────────────────────────────────┘
+```
+
+### 1. Autonomous Agents (True Agents)
+* **`Search Agent`**: Created via `create_react_agent(llm, tools=[search_tool])`. It receives a goal, reasons about what to search, invokes Tavily, and returns results.
+* **`Reader Agent`**: Created via `create_react_agent(llm, tools=[scrape_tool])`. It receives search results, autonomously selects the best URL to inspect, calls `scrape_webpage()`, and returns scraped text.
+
+### 2. Sequential Chains (Determinstic LLM Steps)
+* **`Writer Pipeline`**: Uses `writer_chain = writer_prompt | llm | StrOutputParser()`. It is an **LCEL Chain**, not an autonomous agent, because it does not choose tools; it simply transforms research context into a report.
+* **`Critic Pipeline`**: Uses `critic_chain = critic_prompt | llm | StrOutputParser()`. It is also an **LCEL Chain**, which evaluates the report text deterministically.
+
+---
+
+# 9. Strengths
+
+1. **Separation of Concerns**: Clean modular architecture splitting backend Python logic, agent tools, API layers, and React UI.
+2. **Live Web Grounding**: Uses Tavily and BeautifulSoup to pull real, up-to-date internet data.
+3. **Non-Blocking Asynchronous Server**: FastAPI uses background threads (`threading.Thread`) so status requests remain responsive while research is running.
+4. **Self-Auditing Critic**: Adds an objective evaluation layer that scores reports out of 10 and highlights areas to improve.
+5. **Windows UTF-8 Encoding Safeguards**: Reconfigures Python standard output streams to prevent Windows console `charmap` codec crashes.
+6. **Polished React UI**: Features dynamic agent pipeline animations, real-time log streaming, clean source cards, and Markdown report rendering.
+
+---
+
+# 10. Weaknesses
+
+1. **In-Memory Job Storage**: Research jobs are stored in a Python dictionary (`research_jobs = {}`). If the server restarts, past research job history stored in server memory is reset.
+2. **Linear Pipeline Execution**: Pipeline steps execute strictly sequentially (`Search` → `Read` → `Write` → `Critic`). If a step takes long, later steps must wait.
+3. **Single URL Scraping Limit**: The `Reader Agent` currently scrapes only the top selected URL.
+4. **No Database Persistence**: History is saved in browser `localStorage` and backend RAM rather than a SQL database (e.g., PostgreSQL / SQLite).
+
+---
+
+# 11. Viva Questions (Academic Defense Preparation)
+
+Here are 5 questions a college professor or interviewer will likely ask:
+
+1. **Q: Why did you use `create_react_agent` from LangGraph for search/reader, but standard LCEL chains for writer/critic?**  
+   *Answer:* Search and reading require tool execution and autonomous decision-making (ReAct pattern). Writing and critiquing require pure text transformation and evaluation, where a deterministic chain (`prompt | llm | parser`) is faster, cheaper, and more reliable.
+
+2. **Q: How does your React frontend track background research execution without blocking HTTP requests?**  
+   *Answer:* When React sends `POST /api/research`, FastAPI spawns a background thread and immediately returns a `job_id`. React then polls `GET /api/research/{job_id}/status` every 1.5 seconds until progress reaches 100%.
+
+3. **Q: How do you prevent LLM hallucination in your research reports?**  
+   *Answer:* By combining Tavily web search snippets and BeautifulSoup webpage scraping into the prompt context, and using a Critic Chain to audit source grounding and factual consistency.
+
+4. **Q: What is the role of `StrOutputParser()` in your LCEL chains?**  
+   *Answer:* LLMs return complex `AIMessage` objects containing metadata. `StrOutputParser()` extracts only the clean text content string from the LLM response.
+
+5. **Q: How did you solve Windows Unicode encoding errors when printing web content?**  
+   *Answer:* Reconfigured `sys.stdout` and `sys.stderr` to use `utf-8` encoding with `errors='replace'`, and created a fallback stringifier wrapper (`stringify_content`).
+
+---
+
+# 12. What I Need to Learn Next
+
+To master your project step by step, here is your recommended learning roadmap:
+
+1. **Python Foundations**: Functions, Dictionaries, Modules, Exception Handling, Threading.
+2. **HTTP & REST APIs**: Requests, Responses, JSON, Status Codes, Axios.
+3. **LLMs & Prompt Engineering**: System messages, Human messages, Temperature settings.
+4. **LangChain & LCEL**: Prompts, Models, Output Parsers, `|` Pipe composition.
+5. **Tools & Function Calling**: Tool schemas, `TavilySearchResults`, BeautifulSoup HTML parsing.
+6. **Agents & ReAct Pattern**: Reasoning + Action loop (`create_react_agent`).
+7. **FastAPI & Async Backends**: CORS, Background Tasks, Pydantic Models, Endpoint routes.
+8. **React & State Management**: Hooks (`useEffect`, `useState`), Context API, React Router, Tailwind CSS.
+
+---
+
+## WHAT YOU SHOULD REMEMBER
+
+1. **Your project is a full-stack AI application**: React Frontend + FastAPI Backend + Python Multi-Agent Pipeline + Google Gemini LLM.
+2. **It uses a hybrid agent model**: Autonomous ReAct agents for web searching and reading, and LCEL chains for writing and critiquing.
+3. **FastAPI operates asynchronously**: It assigns a `job_id` and runs research in a background thread while React polls for live progress updates.
+4. **Tools extend LLM capabilities**: Tavily gives Gemini internet access; BeautifulSoup lets it read full webpage articles.
+5. **Critic Chain adds self-evaluation**: It parses scores out of 10, strengths, weaknesses, and verdicts directly from LLM feedback.
+
+---
+
+## TEST YOURSELF
+
+Answer these 5 questions to test your understanding of Part 1 (Do not look at the text above!):
+
+1. **What are the 4 main stages executed in `pipeline.py` when a research topic is submitted?**
+2. **Which two external tools are defined in `tools.py`, and what is each tool used for?**
+3. **Why does FastAPI return a `job_id` immediately instead of waiting for the full research report to finish?**
+4. **What is the difference between an autonomous ReAct agent (`Search Agent`) and a chain (`Writer Chain`) in your codebase?**
+5. **Which file serves the REST API endpoints, and which file launches the Uvicorn server?**
